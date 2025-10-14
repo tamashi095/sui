@@ -3,6 +3,7 @@
 
 use anyhow::Context;
 use async_graphql::SimpleObject;
+use chrono::Utc;
 use sui_rpc::proto::sui::rpc::v2beta2 as proto;
 use sui_types::transaction::TransactionData;
 
@@ -75,7 +76,7 @@ impl SimulationResult {
                     native: native_event,
                     transaction_digest: transaction_data.digest(),
                     sequence_number: sequence as u64,
-                    timestamp_ms: 0, // No timestamp for simulation
+                    timestamp_ms: Utc::now().timestamp_millis() as u64,
                 })
                 .collect()
         });
