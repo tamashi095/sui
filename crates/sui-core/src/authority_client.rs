@@ -166,6 +166,10 @@ impl NetworkAuthorityClient {
     pub(crate) fn client(&self) -> SuiResult<ValidatorClient<Channel>> {
         self.client.clone()
     }
+
+    pub fn client_for_testing(&self) -> ValidatorClient<Channel> {
+        self.client.clone().unwrap()
+    }
 }
 
 #[async_trait]

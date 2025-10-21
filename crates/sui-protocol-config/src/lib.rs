@@ -2363,9 +2363,6 @@ impl ProtocolConfig {
         );
         if account_aliases {
             // TODO: when flag for disabling CertifiedTransaction is added, add assertion for it here.
-            unimplemented!(
-                "account_aliases depends on disabling CertifiedTransaction, which is not yet implemented"
-            );
         }
         account_aliases
     }
@@ -4183,7 +4180,11 @@ impl ProtocolConfig {
                     cfg.feature_flags.use_new_commit_handler = true;
                     cfg.feature_flags.create_root_accumulator_object = true;
                 }
-                100 => {}
+                100 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.account_aliases = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
