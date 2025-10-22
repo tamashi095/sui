@@ -16,7 +16,7 @@ use sui_types::{
     messages_checkpoint::{CheckpointContents, CheckpointSummary},
     object::Object,
 };
-use tonic::transport::Channel;
+use tonic::transport::{Channel, ClientTlsConfig};
 
 use crate::{
     checkpoints::CheckpointKey, error::Error, events::TransactionEventsKey,
@@ -39,8 +39,9 @@ pub struct KvGrpcReader(LedgerServiceClient<Channel>);
 
 impl KvGrpcReader {
     pub async fn new(url: String) -> anyhow::Result<Self> {
-        let channel = Channel::from_shared(url)
-            .context("Failed to create channel for gRPC endpoint")?
+        let tls_config = ClientTlsConfig::new().with_native_roots();
+        let channel = Channel::from_shared(url)?
+            .tls_config(tls_config)?
             .connect()
             .await
             .context("Failed to connect to gRPC endpoint")?;
