@@ -48,7 +48,7 @@ async fn test_publish_package() {
     );
     
     // Execute transaction using wallet
-    let tx = test_cluster.wallet.sign_transaction(&tx_data);
+    let tx = test_cluster.wallet.sign_transaction(&tx_data).await;
     let response = test_cluster.wallet.execute_transaction_may_fail(tx).await.unwrap();
     
     // Extract package ID from effects
