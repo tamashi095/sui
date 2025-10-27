@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use async_graphql::dataloader::{DataLoader, Loader};
 use prost_types::FieldMask;
 use sui_kvstore::TransactionEventsData;
@@ -16,18 +16,32 @@ use sui_types::{
     messages_checkpoint::{CheckpointContents, CheckpointSummary},
     object::Object,
 };
-use tonic::transport::{Channel, ClientTlsConfig};
+use sui_types::{
+    effects::TransactionEffects, event::Event, signature::GenericSignature,
+    transaction::TransactionData,
+};
+use tonic::transport::{Channel, ClientTlsConfig, Uri};
 
 use crate::{
     checkpoints::CheckpointKey, error::Error, events::TransactionEventsKey,
-    kv_loader::TransactionContents, objects::VersionedObjectKey, transactions::TransactionKey,
+    objects::VersionedObjectKey, transactions::TransactionKey,
 };
 
 #[derive(clap::Args, Debug, Clone, Default)]
-pub struct KvGrpcArgs {
-    /// gRPC endpoint URL for the KV RPC service (e.g., archive.mainnet.sui.io)
+pub struct LedgerGrpcArgs {
+    /// gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
     #[arg(long)]
-    pub kv_grpc_url: Option<String>,
+    pub ledger_grpc_uri: Option<Uri>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CheckpointedTransaction {
+    pub effects: Box<TransactionEffects>,
+    pub events: Option<Vec<Event>>,
+    pub transaction_data: Box<TransactionData>,
+    pub signatures: Vec<GenericSignature>,
+    pub timestamp_ms: Option<u64>,
+    pub cp_sequence_number: Option<u64>,
 }
 
 /// A reader backed by gRPC LedgerService (sui-kv-rpc).
@@ -35,12 +49,12 @@ pub struct KvGrpcArgs {
 /// This connects to archival service that implements the same LedgerService gRPC interface
 /// as fullnode, but is backed by Bigtable for serving historical data.
 #[derive(Clone)]
-pub struct KvGrpcReader(LedgerServiceClient<Channel>);
+pub struct LedgerGrpcReader(LedgerServiceClient<Channel>);
 
-impl KvGrpcReader {
-    pub async fn new(url: String) -> anyhow::Result<Self> {
+impl LedgerGrpcReader {
+    pub async fn new(uri: Uri) -> anyhow::Result<Self> {
         let tls_config = ClientTlsConfig::new().with_native_roots();
-        let channel = Channel::from_shared(url)?
+        let channel = Channel::builder(uri)
             .tls_config(tls_config)?
             .connect()
             .await
@@ -56,7 +70,7 @@ impl KvGrpcReader {
 }
 
 #[async_trait::async_trait]
-impl Loader<VersionedObjectKey> for KvGrpcReader {
+impl Loader<VersionedObjectKey> for LedgerGrpcReader {
     type Value = Object;
     type Error = Error;
 
@@ -101,7 +115,7 @@ impl Loader<VersionedObjectKey> for KvGrpcReader {
 }
 
 #[async_trait::async_trait]
-impl Loader<CheckpointKey> for KvGrpcReader {
+impl Loader<CheckpointKey> for LedgerGrpcReader {
     type Value = (
         CheckpointSummary,
         CheckpointContents,
@@ -157,7 +171,7 @@ impl Loader<CheckpointKey> for KvGrpcReader {
                     results.insert(*key, (summary, contents, signature));
                 }
                 Err(status) if status.code() == tonic::Code::NotFound => continue,
-                Err(e) => return Err(Error::Tonic(e.into())),
+                Err(e) => return Err(e.into()),
             }
         }
         Ok(results)
@@ -165,8 +179,8 @@ impl Loader<CheckpointKey> for KvGrpcReader {
 }
 
 #[async_trait::async_trait]
-impl Loader<TransactionKey> for KvGrpcReader {
-    type Value = TransactionContents;
+impl Loader<TransactionKey> for LedgerGrpcReader {
+    type Value = CheckpointedTransaction;
     type Error = Error;
 
     async fn load(
@@ -198,8 +212,25 @@ impl Loader<TransactionKey> for KvGrpcReader {
             if let Some(proto::get_transaction_result::Result::Transaction(executed)) =
                 tx_result.result
             {
-                let contents = TransactionContents::from_executed_transaction_v2(&executed)?;
-                results.insert(*key, contents);
+                let full_tx: sui_types::full_checkpoint_content::ExecutedTransaction = (&executed)
+                    .try_into()
+                    .context("Failed to convert ExecutedTransaction from proto")?;
+
+                let timestamp_ms = executed
+                    .timestamp
+                    .map(proto_to_timestamp_ms)
+                    .transpose()
+                    .map_err(|e| anyhow::anyhow!("Failed to parse timestamp: {}", e))?;
+
+                let transaction = CheckpointedTransaction {
+                    effects: Box::new(full_tx.effects),
+                    events: full_tx.events.map(|events| events.data),
+                    transaction_data: Box::new(full_tx.transaction),
+                    signatures: full_tx.signatures,
+                    timestamp_ms,
+                    cp_sequence_number: executed.checkpoint,
+                };
+                results.insert(*key, transaction);
             }
         }
         Ok(results)
@@ -207,7 +238,7 @@ impl Loader<TransactionKey> for KvGrpcReader {
 }
 
 #[async_trait::async_trait]
-impl Loader<TransactionEventsKey> for KvGrpcReader {
+impl Loader<TransactionEventsKey> for LedgerGrpcReader {
     type Value = TransactionEventsData;
     type Error = Error;
 
@@ -260,7 +291,7 @@ impl Loader<TransactionEventsKey> for KvGrpcReader {
                     );
                 }
                 Err(status) if status.code() == tonic::Code::NotFound => continue,
-                Err(e) => return Err(Error::Tonic(e.into())),
+                Err(e) => return Err(e.into()),
             }
         }
         Ok(results)

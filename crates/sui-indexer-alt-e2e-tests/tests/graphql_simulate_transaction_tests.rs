@@ -15,7 +15,7 @@ use sui_indexer_alt_graphql::{
 };
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, kv_grpc_reader::KvGrpcArgs,
+    fullnode_client::FullnodeArgs, ledger_grpc_reader::LedgerGrpcArgs,
     system_package_task::SystemPackageTaskArgs,
 };
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
@@ -196,7 +196,7 @@ impl GraphQlTestCluster {
             fullnode_args,
             DbArgs::default(),
             BigtableArgs::default(),
-            KvGrpcArgs::default(),
+            LedgerGrpcArgs::default(),
             ConsistentReaderArgs::default(),
             GraphQlArgs {
                 rpc_listen_address: graphql_listen_address,
