@@ -13,6 +13,8 @@ petgraph.workspace = true
 pretty_simple.workspace = true
 tempfile.workspace = true
 
+backtrace-on-stack-overflow.workspace = true
+
 move-abstract-interpreter.workspace = true
 move-binary-format.workspace = true
 move-command-line-common.workspace = true

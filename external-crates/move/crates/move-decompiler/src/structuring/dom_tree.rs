@@ -6,7 +6,7 @@ use petgraph::{
     graph::{DiGraph, NodeIndex},
 };
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 #[derive(Debug)]
 pub struct DominatorTree(Node);
@@ -21,7 +21,7 @@ impl DominatorTree {
     pub fn from_graph<N, E>(graph: &DiGraph<N, E>, root: NodeIndex) -> DominatorTree {
         fn build_node(
             value: NodeIndex,
-            child_map: &mut HashMap<NodeIndex, Vec<NodeIndex>>,
+            child_map: &mut BTreeMap<NodeIndex, Vec<NodeIndex>>,
         ) -> Node {
             let children = child_map.remove(&value).unwrap_or_default();
             let children = children
@@ -32,8 +32,8 @@ impl DominatorTree {
         }
 
         let dominators = simple_fast(&graph, root);
-        let mut child_map: HashMap<NodeIndex, Vec<NodeIndex>> = HashMap::new();
-        let all_nodes: HashSet<NodeIndex> = graph.node_indices().collect();
+        let mut child_map: BTreeMap<NodeIndex, Vec<NodeIndex>> = BTreeMap::new();
+        let all_nodes: BTreeSet<NodeIndex> = graph.node_indices().collect();
 
         for &node in &all_nodes {
             if let Some(idom) = dominators.immediate_dominator(node) {

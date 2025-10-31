@@ -3,6 +3,7 @@
 
 use crate::utils::comma_separated;
 
+use move_abstract_interpreter::control_flow_graph::VMControlFlowGraph;
 use move_binary_format::normalized::{Constant, FieldRef, ModuleId, StructRef, Type, VariantRef};
 use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue};
 use move_symbol_pool::Symbol;
@@ -180,6 +181,17 @@ pub type LocalId = usize;
 // Impls
 // -------------------------------------------------------------------------------------------------
 
+impl Function {
+    pub fn to_vm_control_flow_graph(&self) -> VMControlFlowGraph<Instruction> {
+        let instructions = self
+            .basic_blocks
+            .values()
+            .flat_map(|block| block.instructions.clone())
+            .collect::<Vec<_>>();
+        VMControlFlowGraph::new(&instructions, &())
+    }
+}
+
 impl BasicBlock {
     pub fn new(label: Label) -> Self {
         Self {
@@ -199,6 +211,83 @@ impl BasicBlock {
 impl Register {
     pub fn name(&self) -> String {
         format!("reg_{}", self.name)
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Instruction Impl
+// -------------------------------------------------------------------------------------------------
+
+impl move_abstract_interpreter::control_flow_graph::Instruction for Instruction {
+    type Index = Label;
+
+    type VariantJumpTables = ();
+
+    const ENTRY_BLOCK_ID: Self::Index = 0;
+
+    fn get_successors(
+        pc: Self::Index,
+        code: &[Self],
+        _jump_tables: &Self::VariantJumpTables,
+    ) -> Vec<Self::Index> {
+        let next_pc = if pc + 1 < code.len() {
+            vec![pc + 1]
+        } else {
+            vec![pc]
+        };
+        let mut next = match &code[pc] {
+            Instruction::Return(_) | Instruction::Abort(_) => vec![],
+            Instruction::Jump(next) => vec![*next],
+            Instruction::VariantSwitch { labels, .. } => labels.iter().cloned().collect(),
+            Instruction::JumpIf {
+                then_label,
+                else_label,
+                ..
+            } => vec![*then_label, *else_label],
+            Instruction::Drop(_)
+            | Instruction::NotImplemented(_)
+            | Instruction::AssignReg { .. }
+            | Instruction::StoreLoc { .. }
+            | Instruction::Nop => next_pc,
+        };
+        next.sort();
+        next
+    }
+
+    fn offsets(&self, _jump_tables: &Self::VariantJumpTables) -> Vec<Self::Index> {
+        match self {
+            Instruction::VariantSwitch { labels, .. } => labels.iter().cloned().collect(),
+            Instruction::Jump(lbl) => vec![*lbl],
+            Instruction::JumpIf {
+                then_label,
+                else_label,
+                ..
+            } => vec![*then_label, *else_label],
+            _ => vec![],
+        }
+    }
+
+    fn usize_as_index(i: usize) -> Self::Index {
+        i
+    }
+
+    fn index_as_usize(i: Self::Index) -> usize {
+        i
+    }
+
+    fn is_branch(&self) -> bool {
+        match self {
+            Instruction::Jump(_)
+            | Instruction::JumpIf { .. }
+            | Instruction::VariantSwitch { .. }
+            | Instruction::Return(_)
+            | Instruction::Abort(_) => true,
+            Instruction::AssignReg { .. }
+            | Instruction::StoreLoc { .. }
+            | Instruction::Nop
+            | Instruction::Drop(_)
+            | Instruction::NotImplemented(_) => false,
+        }
     }
 }
 

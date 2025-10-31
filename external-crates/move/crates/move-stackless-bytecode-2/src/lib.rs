@@ -10,6 +10,7 @@ use move_model_2::{
 use std::collections::BTreeMap;
 
 pub mod ast;
+pub mod analysis;
 pub(crate) mod optimizations;
 pub mod translate;
 pub(crate) mod utils;

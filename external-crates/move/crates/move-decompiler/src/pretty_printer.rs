@@ -430,9 +430,7 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
             .concat(D::text(")")),
 
         DataOp::VecPopBack(_) => maybe_parens(context, &args[0])
-            .concat(D::text(".pop_back("))
-            .concat(exp(context, &args[1]))
-            .concat(D::text(")")),
+            .concat(D::text(".pop_back()")),
 
         DataOp::VecSwap(_) => maybe_parens(context, &args[0])
             .concat(D::text(".swap("))
@@ -501,12 +499,12 @@ fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
     };
 
     match op {
-        PrimitiveOp::CastU8 => exp(context, &args[0]).concat(D::text("as u8")),
-        PrimitiveOp::CastU16 => exp(context, &args[0]).concat(D::text("as u16")),
-        PrimitiveOp::CastU32 => exp(context, &args[0]).concat(D::text("as u32")),
-        PrimitiveOp::CastU64 => exp(context, &args[0]).concat(D::text("as u64")),
-        PrimitiveOp::CastU128 => exp(context, &args[0]).concat(D::text("as u128")),
-        PrimitiveOp::CastU256 => exp(context, &args[0]).concat(D::text("as u256")),
+        PrimitiveOp::CastU8 => exp(context, &args[0]).concat(D::text(" as u8")),
+        PrimitiveOp::CastU16 => exp(context, &args[0]).concat(D::text(" as u16")),
+        PrimitiveOp::CastU32 => exp(context, &args[0]).concat(D::text(" as u32")),
+        PrimitiveOp::CastU64 => exp(context, &args[0]).concat(D::text(" as u64")),
+        PrimitiveOp::CastU128 => exp(context, &args[0]).concat(D::text(" as u128")),
+        PrimitiveOp::CastU256 => exp(context, &args[0]).concat(D::text(" as u256")),
 
         PrimitiveOp::Add => bin(&args[0], "+", &args[1]),
         PrimitiveOp::Subtract => bin(&args[0], "-", &args[1]),
@@ -542,12 +540,14 @@ fn value(v: &Value) -> Doc {
         Value::U128(u) => D::text(u.to_string()).concat(D::text("u128")),
         Value::U256(u) => D::text(u.to_string()).concat(D::text("u256")),
         Value::Address(a) => D::text(format!("@{:X}", a)),
-        Value::Vector(values) => D::text("vec![")
-            .concat(D::intersperse(
-                values.iter().map(value),
-                D::text(",").concat(D::space()),
-            ))
-            .concat(D::text("]")),
+        Value::Vector(values) => {
+            D::text("vec![")
+                    .concat(D::intersperse(
+                        values.iter().map(value),
+                        D::text(",").concat(D::space()),
+                    ))
+                    .concat(D::text("]"))
+        },
         Value::Struct(_) | Value::Signer(_) | Value::Variant(_) => unreachable!(),
     }
 }

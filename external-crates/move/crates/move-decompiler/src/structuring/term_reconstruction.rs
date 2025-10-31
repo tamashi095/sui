@@ -5,11 +5,11 @@ use crate::ast as Out;
 
 use move_stackless_bytecode_2::ast::{DataOp, RValue, RegId, Trivial};
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub fn exp(
     block: move_stackless_bytecode_2::ast::BasicBlock,
-    let_binds: &mut HashSet<RegId>,
+    let_binds: &mut BTreeSet<RegId>,
 ) -> Out::Exp {
     use move_stackless_bytecode_2::ast::Instruction as SI;
     let mut map: BTreeMap<RegId, Out::Exp> = BTreeMap::new();
@@ -43,7 +43,7 @@ pub fn exp(
                                 tmp
                             })
                             .collect();
-                        seq.push(Out::Exp::Assign(tmps, Box::new(call)));
+                        seq.push(Out::Exp::LetBind(tmps, Box::new(call)));
                     }
                 }
             }

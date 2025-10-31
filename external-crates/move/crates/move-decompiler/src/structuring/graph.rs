@@ -13,7 +13,7 @@ use petgraph::{
 };
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     hash::RandomState,
 };
 
@@ -22,8 +22,8 @@ pub struct Graph {
     pub cfg: DiGraph<(), ()>,
     pub return_: NodeIndex,
     pub dom_tree: dom_tree::DominatorTree,
-    pub loop_heads: HashSet<NodeIndex>,
-    pub back_edges: HashMap<NodeIndex, HashSet<NodeIndex>>,
+    pub loop_heads: BTreeSet<NodeIndex>,
+    pub back_edges: BTreeMap<NodeIndex, BTreeSet<NodeIndex>>,
     pub post_dominators: Dominators<NodeIndex>,
 }
 
@@ -84,7 +84,7 @@ impl Graph {
             .iter()
             .filter_map(|latch| self.back_edges.remove(latch))
             .flatten()
-            .collect::<HashSet<NodeIndex>>();
+            .collect::<BTreeSet<NodeIndex>>();
         if !latches.is_empty() {
             let result = self.back_edges.insert(node, latches);
             assert!(result.is_none());
@@ -107,9 +107,9 @@ impl Graph {
     pub fn find_loop_nodes(
         &self,
         node_start: NodeIndex,
-    ) -> (HashSet<NodeIndex>, HashSet<NodeIndex>) {
-        let mut loop_nodes = HashSet::new();
-        let mut succ_nodes = HashSet::new();
+    ) -> (BTreeSet<NodeIndex>, BTreeSet<NodeIndex>) {
+        let mut loop_nodes = BTreeSet::new();
+        let mut succ_nodes = BTreeSet::new();
 
         let latch_nodes = self
             .back_edges
@@ -118,11 +118,15 @@ impl Graph {
             .map(|(node_id, _)| *node_id);
 
         for latch_node in latch_nodes {
-            let paths = petgraph::algo::all_simple_paths::<Vec<_>, _, RandomState>(
+            let mut paths = petgraph::algo::all_simple_paths::<Vec<_>, _, RandomState>(
                 &self.cfg, node_start, latch_node, 0, None,
             )
             .collect::<Vec<_>>();
+            paths.sort();
             for path in paths {
+                let mut path = path.into_iter().collect::<BTreeSet<_>>();
+                // Do not include the loop head node itself
+                path.remove(&node_start);
                 loop_nodes.extend(path);
             }
         }
@@ -144,16 +148,16 @@ impl Graph {
 
     fn refine_loop_nodes(
         &self,
-        mut loop_nodes: HashSet<NodeIndex>,
-        mut succ_nodes: HashSet<NodeIndex>,
+        mut loop_nodes: BTreeSet<NodeIndex>,
+        mut succ_nodes: BTreeSet<NodeIndex>,
         loop_header: NodeIndex,
-    ) -> (HashSet<NodeIndex>, HashSet<NodeIndex>) {
+    ) -> (BTreeSet<NodeIndex>, BTreeSet<NodeIndex>) {
         let mut new_nodes = succ_nodes.clone();
         let dom_nodes = self
             .dom_tree
             .get(loop_header)
             .all_children()
-            .collect::<HashSet<_>>();
+            .collect::<BTreeSet<_>>();
         while succ_nodes.len() > 1 && !new_nodes.is_empty() {
             new_nodes.clear();
             for node in succ_nodes.clone() {
@@ -180,13 +184,16 @@ impl Graph {
 fn find_loop_heads_and_back_edges<N, E>(
     graph: &DiGraph<N, E>,
     start: NodeIndex,
-) -> (HashSet<NodeIndex>, HashMap<NodeIndex, HashSet<NodeIndex>>) {
+) -> (
+    BTreeSet<NodeIndex>,
+    BTreeMap<NodeIndex, BTreeSet<NodeIndex>>,
+) {
     pub fn find_recur<N, E>(
         graph: &DiGraph<N, E>,
-        visited: &mut HashSet<NodeIndex>,
+        visited: &mut BTreeSet<NodeIndex>,
         path_to_root: &mut Vec<NodeIndex>,
-        loop_heads: &mut HashSet<NodeIndex>,
-        back_edges: &mut HashMap<NodeIndex, HashSet<NodeIndex>>,
+        loop_heads: &mut BTreeSet<NodeIndex>,
+        back_edges: &mut BTreeMap<NodeIndex, BTreeSet<NodeIndex>>,
         node: NodeIndex,
     ) {
         if !visited.insert(node) {
@@ -209,12 +216,12 @@ fn find_loop_heads_and_back_edges<N, E>(
         assert!(node == path_to_root.pop().expect("No seen node to pop"));
     }
 
-    let mut loop_heads = HashSet::new();
-    let mut back_edges = HashMap::new();
+    let mut loop_heads = BTreeSet::new();
+    let mut back_edges = BTreeMap::new();
 
     find_recur(
         graph,
-        &mut HashSet::new(),
+        &mut BTreeSet::new(),
         &mut vec![],
         &mut loop_heads,
         &mut back_edges,

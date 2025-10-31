@@ -14,7 +14,7 @@ use crate::ast::Exp;
 use move_model_2::{model::Model, source_kind::SourceKind};
 use move_stackless_bytecode_2::ast as SB;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 // -------------------------------------------------------------------------------------------------
 // Entry
@@ -136,7 +136,7 @@ fn make_input(
 
     let blocks_iter = basic_blocks.iter();
     let mut next_blocks_iter = basic_blocks.iter().skip(1);
-    let mut let_binds = HashSet::new();
+    let mut let_binds = BTreeSet::new();
 
     for (lbl, block) in blocks_iter {
         let label = lbl;
@@ -162,7 +162,7 @@ fn make_input(
     (name, terms, input, (entry_label as u32).into())
 }
 
-fn generate_term_block(block: &SB::BasicBlock, let_binds: &mut HashSet<SB::RegId>) -> Out::Exp {
+fn generate_term_block(block: &SB::BasicBlock, let_binds: &mut BTreeSet<SB::RegId>) -> Out::Exp {
     // remove the last jump / replace the conditional with just the "triv" in it
     term_reconstruction::exp(block.clone(), let_binds)
 }

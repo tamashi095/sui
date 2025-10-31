@@ -278,9 +278,14 @@ impl std::fmt::Display for Exp {
                 }
                 Exp::Call((module_name, fun_name), exps) => {
                     indent(f, level)?;
-                    write!(f, "{module_name}::{fun_name}(")?;
+                    writeln!(f, "{module_name}::{fun_name}(")?;
+                    let mut first = true;
                     for exp in exps {
-                        fmt_exp(f, exp, level)?;
+                        if !first {
+                            writeln!(f, ",")?;
+                        }
+                        fmt_exp(f, exp, level+2)?;
+                        first = false;
                     }
                     writeln!(f, ")")
                 }
@@ -356,8 +361,6 @@ fn write_data_op(
     args: &[Exp],
 ) -> Result<(), std::fmt::Error> {
     match op {
-        DataOp::Pack(_) => todo!(),
-        DataOp::Unpack(_) => todo!(),
         DataOp::ReadRef => write!(f, "*{}", args[0]),
         DataOp::WriteRef => writeln!(f, "*{} = {}", args[0], args[1]),
         DataOp::FreezeRef => write!(f, "freeze({})", args[0]),
@@ -377,13 +380,40 @@ fn write_data_op(
         DataOp::VecImmBorrow(_) => write!(f, "&{}[{}]", args[0], args[1]),
         DataOp::VecMutBorrow(_) => write!(f, "&mut {}[{}]", args[0], args[1]),
         DataOp::VecPushBack(_) => write!(f, "{}.push_back({})", args[0], args[1]),
-        DataOp::VecPopBack(_) => write!(f, "{}.pop_back({})", args[0], args[1]),
+        DataOp::VecPopBack(_) => write!(f, "{}.pop_back()", args[0]),
         DataOp::VecUnpack(_) => unreachable!(),
         DataOp::VecSwap(_) => write!(f, "{}.swap({}, {})", args[0], args[1], args[2]),
-        DataOp::PackVariant(_) => write!(f, "E::V .. fields .. args"),
-        DataOp::UnpackVariant(_) => unreachable!(),
-        DataOp::UnpackVariantImmRef(_) => unreachable!(),
-        DataOp::UnpackVariantMutRef(_) => unreachable!(),
+        DataOp::PackVariant(ty) => {
+            write!(
+                f,
+                "{}::{}::{} {{ {} }}",
+                ty.enum_.defining_module,
+                ty.enum_.name,
+                ty.variant.name,
+                args.iter()
+                    .zip(ty.variant.fields.0.iter())
+                    .map(|(e, (field, _))| format!("{field} : {e}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+        DataOp::Pack(ty) => {
+            write!(
+                f,
+                "{}::{} {{ {} }}",
+                ty.struct_.defining_module,
+                ty.struct_.name,
+                args.iter()
+                    .zip(ty.struct_.fields.0.iter())
+                    .map(|(e, (field, _))| format!("{field} : {e}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+        DataOp::Unpack(_)
+        | DataOp::UnpackVariant(_)
+        | DataOp::UnpackVariantImmRef(_)
+        | DataOp::UnpackVariantMutRef(_) => unreachable!(),
     }
 }
 
@@ -393,12 +423,12 @@ fn write_primitive_op(
     args: &[Exp],
 ) -> Result<(), std::fmt::Error> {
     match op {
-        PrimitiveOp::CastU8 => todo!(),
-        PrimitiveOp::CastU16 => todo!(),
-        PrimitiveOp::CastU32 => todo!(),
-        PrimitiveOp::CastU64 => todo!(),
-        PrimitiveOp::CastU128 => todo!(),
-        PrimitiveOp::CastU256 => todo!(),
+        PrimitiveOp::CastU8 => write!(f, "{} as u8", args[0]),
+        PrimitiveOp::CastU16 => write!(f, "{} as u16", args[0]),
+        PrimitiveOp::CastU32 => write!(f, "{} as u32", args[0]),
+        PrimitiveOp::CastU64 => write!(f, "{} as u64", args[0]),
+        PrimitiveOp::CastU128 => write!(f, "{} as u128", args[0]),
+        PrimitiveOp::CastU256 => write!(f, "{} as u256", args[0]),
         PrimitiveOp::Add => write!(f, "{} + {}", args[0], args[1]),
         PrimitiveOp::Subtract => write!(f, "{} - {}", args[0], args[1]),
         PrimitiveOp::Multiply => write!(f, "{} * {}", args[0], args[1]),
@@ -416,7 +446,7 @@ fn write_primitive_op(
         PrimitiveOp::GreaterThan => write!(f, "{} > {}", args[0], args[1]),
         PrimitiveOp::LessThanOrEqual => write!(f, "{} <= {}", args[0], args[1]),
         PrimitiveOp::GreaterThanOrEqual => write!(f, "{} >= {}", args[0], args[1]),
-        PrimitiveOp::ShiftLeft => todo!(),
-        PrimitiveOp::ShiftRight => todo!(),
+        PrimitiveOp::ShiftLeft => write!(f, "{} << {}", args[0], args[1]),
+        PrimitiveOp::ShiftRight => write!(f, "{} >> {}", args[0], args[1]),
     }
 }

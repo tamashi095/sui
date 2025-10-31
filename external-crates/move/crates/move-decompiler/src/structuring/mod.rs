@@ -13,7 +13,7 @@ use crate::{
 
 use petgraph::{graph::NodeIndex, visit::DfsPostOrder};
 
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 // ------------------------------------------------------------------------------------------------
 // Structuring Algorithm
@@ -143,7 +143,7 @@ fn structure_loop(
 }
 
 fn insert_breaks(
-    loop_nodes: &HashSet<NodeIndex>,
+    loop_nodes: &BTreeSet<NodeIndex>,
     loop_head: NodeIndex,
     succ_node: Option<NodeIndex>,
     node: D::Structured,
@@ -160,7 +160,7 @@ fn insert_breaks(
     }
 
     fn find_latch_kind(
-        loop_nodes: &HashSet<NodeIndex>,
+        loop_nodes: &BTreeSet<NodeIndex>,
         loop_head: NodeIndex,
         succ_node: Option<NodeIndex>,
         node_ndx: NodeIndex,
@@ -306,7 +306,7 @@ fn structure_acyclic_region(
     inside_loop: bool,
 ) -> D::Structured {
     let dom_node = graph.dom_tree.get(start);
-    let ichildren = dom_node.immediate_children().collect::<HashSet<_>>();
+    let ichildren = dom_node.immediate_children().collect::<BTreeSet<_>>();
     let post_dominator = graph.post_dominators.immediate_dominator(start).unwrap();
 
     if config.debug_print.structuring {
@@ -411,10 +411,52 @@ fn structure_acyclic_region(
         if config.debug_print.dominators {
             println!("  => emitting post-dominator");
         }
+        let Some(last) = exp.last_mut() else {
+            panic!("Expected at least one structured block in acyclic region at {start:#?}");
+        };
+        eliminate_dominatator_jumps(last, post_dominator);
         exp.push(structured_blocks.remove(&post_dominator).unwrap());
     }
     flatten_sequence(D::Structured::Seq(exp))
 }
+
+/// Walk the instructions in `exp` and eliminate an ending jump ot `post_dominator`, replacing it
+/// with an empty sequence.
+fn eliminate_dominatator_jumps(exp: &mut D::Structured, post_dominator: NodeIndex) {
+    match exp {
+        D::Structured::Seq(seq) => {
+                let Some(last) = seq.last_mut() else {
+                    return;
+                };
+                eliminate_dominatator_jumps(last, post_dominator);
+            }
+        D::Structured::Jump(target) if *target == post_dominator => {
+                *exp = D::Structured::Seq(vec![]);
+            }
+        D::Structured::Jump(_) => {}
+        D::Structured::IfElse(_, conseq, alt) => {
+                eliminate_dominatator_jumps(conseq, post_dominator);
+                let alt = alt.as_mut().as_mut();
+                alt.map(|alt| {
+                    eliminate_dominatator_jumps(alt, post_dominator);
+                });
+            }
+        D::Structured::Switch(_, _, arms) => {
+                for (_v, arm) in arms.iter_mut() {
+                    eliminate_dominatator_jumps(arm, post_dominator);
+                }
+            }
+        // No jumps to eliminate in these cases
+        D::Structured::Break |
+        D::Structured::Continue |
+        D::Structured::Block(_) => {}
+        // Loop body will be handled when structuring the loop
+        D::Structured::Loop(_) => {},
+        // Jump-if is only created in latch nodes, and will be handled in loop structuring
+        D::Structured::JumpIf(_, _, _) => {},
+    }
+}
+
 
 fn structure_latch_node(
     config: &config::Config,

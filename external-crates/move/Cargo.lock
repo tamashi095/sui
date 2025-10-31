@@ -194,6 +194,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "backtrace-on-stack-overflow"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fd2d70527f3737a1ad17355e260706c1badebabd1fa06a7a053407380df841b"
+dependencies = [
+ "backtrace",
+ "libc",
+ "nix",
+]
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1932,6 +1943,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
+name = "memoffset"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "memory-stats"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2340,6 +2360,7 @@ name = "move-decompiler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "backtrace-on-stack-overflow",
  "bcs",
  "clap 4.5.28",
  "datatest-stable",
@@ -3104,6 +3125,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f3790c00a0150112de0f4cd161e3d7fc4b2d8a5542ffc35f099a2562aecb35c"
+dependencies = [
+ "bitflags 1.3.2",
+ "cc",
+ "cfg-if",
+ "libc",
+ "memoffset",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3499,9 +3533,9 @@ dependencies = [
 
 [[package]]
 name = "pretty_simple"
-version = "0.1.1"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0911c3f13453d78cf188c7da2fb0b4a1d4991a6b1f051e63d251eae1ef3d92aa"
+checksum = "ce5f33f1e15ede98d6bf380779f1d4cd90ca3f0943c0aab6637c60fcdd7d9024"
 dependencies = [
  "insta",
  "once_cell",

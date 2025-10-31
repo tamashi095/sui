@@ -314,6 +314,10 @@ impl<I: Instruction> VMControlFlowGraph<I> {
             .iter()
             .fold(0, |acc, (_, edges)| acc + edges.len())
     }
+
+    pub fn to_reverse_control_flow_graph(&self) -> &_ {
+        todo!()
+    }
 }
 
 impl<I: Instruction> ControlFlowGraph for VMControlFlowGraph<I> {
@@ -380,4 +384,25 @@ impl<I: Instruction> ControlFlowGraph for VMControlFlowGraph<I> {
             .get(&next)
             .is_some_and(|back_edges| back_edges.contains(&cur))
     }
+}
+
+pub struct ReverseCFG<'forward, I: Instruction> {
+    terminal: I::Index,,
+    terminal_block: BasicBlock<I::Index>,
+    blocks: &'forward mut Blocks,
+    successor_map: &'forward mut BTreeMap<Label, BTreeSet<Label>>,
+    predecessor_map: &'forward mut BTreeMap<Label, BTreeSet<Label>>,
+    traversal_order: Vec<Label>,
+    traversal_successors: BTreeMap<Label, Label>,
+    loop_heads: BTreeMap<Label, BTreeSet<Label>>,
+}
+
+
+pub struct VMControlFlowGraph<I: Instruction> {
+    /// The basic blocks
+    blocks: BTreeMap<I::Index, BasicBlock<I::Index>>,
+    /// Basic block ordering for traversal
+    traversal_successors: BTreeMap<I::Index, I::Index>,
+    /// Map of loop heads with all of their back edges
+    loop_heads: BTreeMap<I::Index, /* back edges */ BTreeSet<I::Index>>,
 }

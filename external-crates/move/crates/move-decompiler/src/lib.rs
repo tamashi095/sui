@@ -131,7 +131,9 @@ fn generate_module<S: SourceKind>(
 
     let doc = pretty_printer::module(model, pkg_name, model_mod, module)?;
 
+    println!("Rendering module: {}", module.name);
     let output = doc.render(100);
+    println!("Done rendering");
     println!("- {}", path.display());
     let _ = std::fs::remove_file(path); // ignore error if file does not exist
     std::fs::write(path, output)?;
