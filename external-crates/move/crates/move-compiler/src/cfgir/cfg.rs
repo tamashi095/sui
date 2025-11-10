@@ -565,6 +565,10 @@ impl<'forward, Blocks: Deref<Target = BasicBlocks>> ReverseCFG<'forward, Blocks>
             debug_assert!(id.0 >= forward_loop_head.0);
             loop_heads.entry(id).or_default().insert(forward_loop_head);
         }
+        for (lbl, entries) in successor_map.iter() {
+            print!("{} -> {:?},", lbl, entries);
+        }
+        println!("\n{:#?}", blocks);
         let res = Self {
             terminal,
             terminal_block: BasicBlock::new(),

@@ -284,7 +284,7 @@ impl std::fmt::Display for Exp {
                         if !first {
                             writeln!(f, ",")?;
                         }
-                        fmt_exp(f, exp, level+2)?;
+                        fmt_exp(f, exp, level + 2)?;
                         first = false;
                     }
                     writeln!(f, ")")

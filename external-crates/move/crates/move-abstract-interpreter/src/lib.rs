@@ -3,3 +3,5 @@
 
 pub mod absint;
 pub mod control_flow_graph;
+
+mod unit_tests;

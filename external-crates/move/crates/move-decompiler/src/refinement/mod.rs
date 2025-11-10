@@ -6,8 +6,8 @@ use crate::ast::Exp;
 mod flatten_seq;
 mod introduce_while;
 mod loop_to_seq;
-mod remove_trailing_continue;
 mod remove_empty_else;
+mod remove_trailing_continue;
 
 pub type Refinement = fn(&mut Exp) -> bool;
 

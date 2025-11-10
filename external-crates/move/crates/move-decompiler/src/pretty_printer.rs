@@ -429,8 +429,7 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
             .concat(exp(context, &args[1]))
             .concat(D::text(")")),
 
-        DataOp::VecPopBack(_) => maybe_parens(context, &args[0])
-            .concat(D::text(".pop_back()")),
+        DataOp::VecPopBack(_) => maybe_parens(context, &args[0]).concat(D::text(".pop_back()")),
 
         DataOp::VecSwap(_) => maybe_parens(context, &args[0])
             .concat(D::text(".swap("))
@@ -540,14 +539,12 @@ fn value(v: &Value) -> Doc {
         Value::U128(u) => D::text(u.to_string()).concat(D::text("u128")),
         Value::U256(u) => D::text(u.to_string()).concat(D::text("u256")),
         Value::Address(a) => D::text(format!("@{:X}", a)),
-        Value::Vector(values) => {
-            D::text("vec![")
-                    .concat(D::intersperse(
-                        values.iter().map(value),
-                        D::text(",").concat(D::space()),
-                    ))
-                    .concat(D::text("]"))
-        },
+        Value::Vector(values) => D::text("vec![")
+            .concat(D::intersperse(
+                values.iter().map(value),
+                D::text(",").concat(D::space()),
+            ))
+            .concat(D::text("]")),
         Value::Struct(_) | Value::Signer(_) | Value::Variant(_) => unreachable!(),
     }
 }

@@ -289,6 +289,20 @@ impl move_abstract_interpreter::control_flow_graph::Instruction for Instruction 
             | Instruction::NotImplemented(_) => false,
         }
     }
+
+    fn is_exit(&self) -> bool {
+        match self {
+            Instruction::Return(_) | Instruction::Abort(_) => true,
+            Instruction::AssignReg { .. }
+            | Instruction::StoreLoc { .. }
+            | Instruction::Jump(_)
+            | Instruction::JumpIf { .. }
+            | Instruction::Nop
+            | Instruction::VariantSwitch { .. }
+            | Instruction::Drop(_)
+            | Instruction::NotImplemented(_) => false,
+        }
+    }
 }
 
 // -------------------------------------------------------------------------------------------------

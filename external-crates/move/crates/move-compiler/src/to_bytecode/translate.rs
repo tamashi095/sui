@@ -734,6 +734,8 @@ fn function(
     };
     let name_loc = f.loc();
     let name = context.function_definition_name(m, f);
+    println!("{}", name);
+    println!("{:#?}", body);
     let ir_function = IR::Function_ {
         loc,
         visibility: v,

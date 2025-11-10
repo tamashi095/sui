@@ -6,7 +6,7 @@ use crate::{
     ast::{Instruction, LocalId, RegId, Register, Trivial},
 };
 
-use move_abstract_interpreter::absint::{analyze_function, JoinResult};
+use move_abstract_interpreter::absint::{JoinResult, analyze_function};
 
 use std::collections::{BTreeMap, BTreeSet};
 

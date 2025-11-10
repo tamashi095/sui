@@ -425,38 +425,35 @@ fn structure_acyclic_region(
 fn eliminate_dominatator_jumps(exp: &mut D::Structured, post_dominator: NodeIndex) {
     match exp {
         D::Structured::Seq(seq) => {
-                let Some(last) = seq.last_mut() else {
-                    return;
-                };
-                eliminate_dominatator_jumps(last, post_dominator);
-            }
+            let Some(last) = seq.last_mut() else {
+                return;
+            };
+            eliminate_dominatator_jumps(last, post_dominator);
+        }
         D::Structured::Jump(target) if *target == post_dominator => {
-                *exp = D::Structured::Seq(vec![]);
-            }
+            *exp = D::Structured::Seq(vec![]);
+        }
         D::Structured::Jump(_) => {}
         D::Structured::IfElse(_, conseq, alt) => {
-                eliminate_dominatator_jumps(conseq, post_dominator);
-                let alt = alt.as_mut().as_mut();
-                alt.map(|alt| {
-                    eliminate_dominatator_jumps(alt, post_dominator);
-                });
-            }
+            eliminate_dominatator_jumps(conseq, post_dominator);
+            let alt = alt.as_mut().as_mut();
+            alt.map(|alt| {
+                eliminate_dominatator_jumps(alt, post_dominator);
+            });
+        }
         D::Structured::Switch(_, _, arms) => {
-                for (_v, arm) in arms.iter_mut() {
-                    eliminate_dominatator_jumps(arm, post_dominator);
-                }
+            for (_v, arm) in arms.iter_mut() {
+                eliminate_dominatator_jumps(arm, post_dominator);
             }
+        }
         // No jumps to eliminate in these cases
-        D::Structured::Break |
-        D::Structured::Continue |
-        D::Structured::Block(_) => {}
+        D::Structured::Break | D::Structured::Continue | D::Structured::Block(_) => {}
         // Loop body will be handled when structuring the loop
-        D::Structured::Loop(_) => {},
+        D::Structured::Loop(_) => {}
         // Jump-if is only created in latch nodes, and will be handled in loop structuring
-        D::Structured::JumpIf(_, _, _) => {},
+        D::Structured::JumpIf(_, _, _) => {}
     }
 }
-
 
 fn structure_latch_node(
     config: &config::Config,
