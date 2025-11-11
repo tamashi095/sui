@@ -11,6 +11,7 @@ use sui_indexer_alt_framework::types::{
     object::Object,
 };
 
+pub(crate) mod cp_blooms;
 pub(crate) mod coin_balance_buckets;
 pub(crate) mod cp_sequence_numbers;
 pub(crate) mod ev_emit_mod;

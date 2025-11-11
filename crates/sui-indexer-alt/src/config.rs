@@ -99,6 +99,7 @@ pub struct PipelineLayer {
     pub sum_displays: Option<SequentialLayer>,
 
     // All concurrent pipelines
+    pub cp_blooms: Option<ConcurrentLayer>,
     pub coin_balance_buckets: Option<ConcurrentLayer>,
     pub obj_info: Option<ConcurrentLayer>,
     pub cp_sequence_numbers: Option<ConcurrentLayer>,
@@ -234,6 +235,7 @@ impl PipelineLayer {
     /// configure.
     pub fn example() -> Self {
         PipelineLayer {
+            cp_blooms: Some(Default::default()),
             coin_balance_buckets: Some(Default::default()),
             obj_info: Some(Default::default()),
             sum_displays: Some(Default::default()),
@@ -329,6 +331,7 @@ impl Merge for PrunerLayer {
 impl Merge for PipelineLayer {
     fn merge(self, other: PipelineLayer) -> anyhow::Result<PipelineLayer> {
         Ok(PipelineLayer {
+            cp_blooms: self.cp_blooms.merge(other.cp_blooms)?,
             coin_balance_buckets: self
                 .coin_balance_buckets
                 .merge(other.coin_balance_buckets)?,

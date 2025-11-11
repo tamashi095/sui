@@ -6,7 +6,7 @@ use anyhow::Context;
 use bootstrap::bootstrap;
 use config::{IndexerConfig, PipelineLayer};
 use handlers::{
-    coin_balance_buckets::CoinBalanceBuckets, cp_sequence_numbers::CpSequenceNumbers,
+    coin_balance_buckets::CoinBalanceBuckets, cp_blooms::CpBlooms, cp_sequence_numbers::CpSequenceNumbers,
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
     kv_objects::KvObjects, kv_packages::KvPackages, kv_protocol_configs::KvProtocolConfigs,
@@ -58,6 +58,7 @@ pub async fn setup_indexer(
     let PipelineLayer {
         sum_displays,
         coin_balance_buckets,
+        cp_blooms,
         cp_sequence_numbers,
         ev_emit_mod,
         ev_struct_inst,
@@ -171,6 +172,7 @@ pub async fn setup_indexer(
     add_concurrent!(ObjInfo, obj_info);
 
     // Unpruned concurrent pipelines
+    add_concurrent!(CpBlooms, cp_blooms);
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);
