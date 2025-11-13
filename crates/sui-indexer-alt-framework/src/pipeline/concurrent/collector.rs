@@ -62,6 +62,9 @@ impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
 /// - Otherwise, it will check for any data to write out at a regular interval (controlled by
 ///   `config.collect_interval()`).
 ///
+/// The `main_reader_lo_rx` channel is used to receive updates on the lowest checkpoint that can be
+/// committed by this pipeline.
+///
 /// This task will shutdown if canceled via the `cancel` token, or if any of its channels are
 /// closed.
 pub(super) fn collector<H: Handler + 'static>(
@@ -98,6 +101,10 @@ pub(super) fn collector<H: Handler + 'static>(
                     break;
                 }
 
+                // A separate branch is needed to determine channel closure. When this channel is
+                // closed, the value may become stale and cause the collector to send checkpoints
+                // that the main pipeline has already pruned. We shut down the collector to avoid
+                // this.
                 result = main_reader_lo_rx.changed() => {
                     if result.is_err() {
                         info!(pipeline = H::NAME, "Main reader lo channel closed, stopping collector");
@@ -615,8 +622,8 @@ mod tests {
         cancel.cancel();
     }
 
-    /// If the `main_reader_lo_rx` channel is Some, the collector must wait for it to initialize the
-    /// `main_reader_lo` value before entering the main loop.
+    /// The collector must wait for `main_reader_lo` to be initialized before attempting to prepare
+    /// checkpoints for commit.
     #[tokio::test(start_paused = true)]
     async fn test_collector_waits_for_main_reader_lo_initialization() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
@@ -665,9 +672,9 @@ mod tests {
     }
 
     /// During initialization, if the `main_reader_lo_rx` channel closes before sending a value, the
-    /// collector should shut down.
+    /// collector should also shut down.
     #[tokio::test]
-    async fn test_collector_shuts_down_when_main_reader_lo_channel_closes_on_initialization() {
+    async fn test_collector_shuts_down_when_main_reader_lo_channel_closes_during_init() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
         let cancel = CancellationToken::new();
@@ -706,9 +713,10 @@ mod tests {
         assert!(collector_rx.try_recv().is_err());
     }
 
-    // During a run, if the `main_reader_lo_rx` channel closes, the collector should shut down.
+    // After initialization, if the `main_reader_lo_rx` channel closes, the collector should shut
+    // down.
     #[tokio::test(start_paused = true)]
-    async fn test_collector_shuts_down_when_main_reader_lo_channel_closes_in_main_loop() {
+    async fn test_collector_shuts_down_when_main_reader_lo_channel_closes_after_init() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
         let cancel = CancellationToken::new();
@@ -763,7 +771,7 @@ mod tests {
         let (_main_reader_lo_tx, main_reader_lo_rx) = watch::channel(Some(5u64));
         let metrics = test_metrics();
 
-        let _collector = collector(
+        let collector = collector(
             Arc::new(TestHandler),
             CommitterConfig {
                 // Collect interval longer than time to advance to ensure timing doesn't trigger
@@ -780,7 +788,7 @@ mod tests {
 
         let eager_rows_plus_one = TestHandler::MIN_EAGER_ROWS + 1;
 
-        let test_data: Vec<_> = [1, 5, 2, 6, 4]
+        let test_data: Vec<_> = [1, 5, 2, 6, 4, 3]
             .into_iter()
             .map(|cp| IndexedCheckpoint::new(0, cp, 10, 1000, vec![Entry; eager_rows_plus_one]))
             .collect();
@@ -790,27 +798,28 @@ mod tests {
         let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
 
         // Make sure that we are advancing watermarks.
-        assert_eq!(batch.watermark.len(), 5);
+        assert_eq!(batch.watermark.len(), 6);
         // And reporting the checkpoints as received.
         assert_eq!(
             metrics
                 .total_collector_checkpoints_received
                 .with_label_values(&[TestHandler::NAME])
                 .get(),
-            5
+            6
         );
-        // But the collector should filter out three checkpoints: (1, 2, 4)
+        // But the collector should filter out four checkpoints: (1, 2, 3, 4)
         assert_eq!(
             metrics
                 .total_collector_skipped_checkpoints
                 .with_label_values(&[TestHandler::NAME])
                 .get(),
-            3
+            4
         );
         // And that we only have values from two checkpoints (5, 6)
         assert_eq!(batch.batch_len, eager_rows_plus_one * 2);
 
         cancel.cancel();
+        collector.await.unwrap();
     }
 
     /// Because a checkpoint may be partially batched before the main reader lo advances past it,
@@ -826,7 +835,7 @@ mod tests {
         let (main_reader_lo_tx, main_reader_lo_rx) = watch::channel(Some(0u64));
         let metrics = test_metrics();
 
-        let _collector = collector(
+        let collector = collector(
             Arc::new(TestHandler),
             CommitterConfig::default(),
             processor_rx,
@@ -889,5 +898,6 @@ mod tests {
         );
 
         cancel.cancel();
+        collector.await.unwrap();
     }
 }

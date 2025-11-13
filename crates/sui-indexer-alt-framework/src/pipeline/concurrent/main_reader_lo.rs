@@ -30,7 +30,7 @@ pub(super) fn track_main_reader_lo<H: Handler + 'static>(
         let mut reader_interval = interval(
             reader_interval_ms
                 .map(|ms| Duration::from_millis(ms / 2))
-                // Dummy value that won't be used
+                // Dummy value that won't be used.
                 .unwrap_or(Duration::from_secs(5)),
         );
 
@@ -60,8 +60,10 @@ pub(super) fn track_main_reader_lo<H: Handler + 'static>(
                         Ok(mut conn) => {
                             match conn.reader_watermark(H::NAME).await {
                                 Ok(watermark_opt) => {
-                                    // If the reader watermark is not found, we assume that pruning
-                                    // is not enabled, and checkpoints >= 0 are valid.
+                                    // If the reader watermark is not present (either because the
+                                    // watermark entry does not exist, or the reader watermark is
+                                    // not set), we assume that pruning is not enabled, and
+                                    // checkpoints >= 0 are valid.
                                     if reader_lo_tx.send(Some(watermark_opt.map_or(0, |wm| wm.reader_lo))).is_err() {
                                         info!(pipeline = H::NAME, "Main reader lo receiver dropped, shutting down task");
                                         break;

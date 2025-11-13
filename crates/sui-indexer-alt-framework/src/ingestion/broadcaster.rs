@@ -147,7 +147,7 @@ async fn ingest_and_broadcast_range(
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
     cancel: CancellationToken,
 ) -> Result<(), Error> {
-    let result = stream::iter(start..end)
+    stream::iter(start..end)
         .try_for_each_spawned(ingest_concurrency, |cp| {
             let mut ingest_hi_rx = ingest_hi_rx.clone();
             let client = client.clone();
@@ -198,8 +198,7 @@ async fn ingest_and_broadcast_range(
                 }
             }
         })
-        .await;
-    result
+        .await
 }
 
 /// Send a checkpoint to all subscribers.

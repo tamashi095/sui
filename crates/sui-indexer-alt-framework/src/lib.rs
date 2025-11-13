@@ -70,9 +70,25 @@ pub struct IndexerArgs {
     /// Sequential pipelines cannot be attached to a tasked indexer.
     ///
     /// The framework ensures that tasked pipelines never commit checkpoints below the main
-    /// pipeline’s pruner watermark.
-    #[arg(long)]
+    /// pipeline’s pruner watermark. Requires `--reader-interval-ms`.
+    #[arg(long, requires = "reader-interval-ms")]
     pub task: Option<String>,
+
+    /// The interval in milliseconds at which each of the pipelines on a tasked indexer should
+    /// refetch its main pipeline's reader watermark. This is required when `--task` is set.
+    #[arg(long, requires = "task")]
+    pub reader_interval_ms: Option<u64>,
+}
+
+/// Configuration for a tasked indexer.
+#[derive(Clone)]
+pub(crate) struct Task {
+    /// Name of the tasked indexer, to be used with the delimiter defined on the indexer's store to
+    /// record pipeline watermarks.
+    task: String,
+    /// The interval in milliseconds at which each of the pipelines on a tasked indexer should
+    /// refecth its main pipeline's reader watermark.
+    reader_interval_ms: u64,
 }
 
 pub struct Indexer<S: Store> {
@@ -110,7 +126,7 @@ pub struct Indexer<S: Store> {
     ///
     /// The framework ensures that tasked pipelines never commit checkpoints below the main
     /// pipeline’s pruner watermark.
-    task: Option<String>,
+    task: Option<Task>,
 
     /// Optional filter for pipelines to run. If `None`, all pipelines added to the indexer will
     /// run. Any pipelines that are present in this filter but not added to the indexer will yield
@@ -163,6 +179,7 @@ impl<S: Store> Indexer<S> {
             last_checkpoint,
             pipeline,
             task,
+            reader_interval_ms,
         } = indexer_args;
 
         let metrics = IndexerMetrics::new(metrics_prefix, registry);
@@ -173,6 +190,12 @@ impl<S: Store> Indexer<S> {
             metrics.clone(),
             cancel.clone(),
         )?;
+
+        let task = task.map(|t| Task {
+            task: t,
+            reader_interval_ms: reader_interval_ms
+                .expect("reader_interval_ms is required when task is set"),
+        });
 
         Ok(Self {
             store,
@@ -331,17 +354,13 @@ impl<S: Store> Indexer<S> {
             .await
             .context("Failed to establish connection to store")?;
 
-        let pipeline_task = pipeline_task::<S>(P::NAME, self.task.as_deref());
+        let pipeline_task =
+            pipeline_task::<S>(P::NAME, self.task.as_ref().map(|t| t.task.as_str()));
 
         let watermark = conn
             .committer_watermark(&pipeline_task)
             .await
-            .with_context(|| {
-                format!(
-                    "Failed to get committer watermark for pipeline {}",
-                    pipeline_task
-                )
-            })?;
+            .with_context(|| format!("Failed to get watermark for {}", pipeline_task))?;
 
         let next_checkpoint = watermark.map_or(self.first_checkpoint.unwrap_or(0), |w| {
             w.checkpoint_hi_inclusive + 1
@@ -417,10 +436,7 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use crate::mocks::store::MockStore;
-    use crate::pipeline::{
-        Processor,
-        concurrent::{ConcurrentConfig, PrunerConfig},
-    };
+    use crate::pipeline::{Processor, concurrent::ConcurrentConfig};
     use crate::store::CommitterWatermark;
 
     use super::*;
@@ -1649,6 +1665,7 @@ mod tests {
             last_checkpoint: Some(15),
             pipeline: vec![],
             task: Some("task".to_string()),
+            reader_interval_ms: Some(10),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1681,16 +1698,7 @@ mod tests {
         let _ = tasked_indexer
             .concurrent_pipeline(
                 MockCheckpointSequenceNumberHandler,
-                ConcurrentConfig {
-                    pruner: Some(PrunerConfig {
-                        interval_ms: 10,
-                        delay_ms: 1000,
-                        retention: 10,
-                        max_chunk_size: 10,
-                        prune_concurrency: 1,
-                    }),
-                    ..ConcurrentConfig::default()
-                },
+                ConcurrentConfig::default(),
             )
             .await;
 
@@ -1746,6 +1754,7 @@ mod tests {
             last_checkpoint: Some(25),
             pipeline: vec![],
             task: Some("task".to_string()),
+            reader_interval_ms: Some(10),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1778,16 +1787,7 @@ mod tests {
         let _ = tasked_indexer
             .concurrent_pipeline(
                 MockCheckpointSequenceNumberHandler,
-                ConcurrentConfig {
-                    pruner: Some(PrunerConfig {
-                        interval_ms: 10,
-                        delay_ms: 1000,
-                        retention: 10,
-                        max_chunk_size: 10,
-                        prune_concurrency: 1,
-                    }),
-                    ..ConcurrentConfig::default()
-                },
+                ConcurrentConfig::default(),
             )
             .await;
 
@@ -1855,6 +1855,7 @@ mod tests {
             last_checkpoint: Some(500),
             pipeline: vec![],
             task: Some("task".to_string()),
+            reader_interval_ms: Some(10),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1887,16 +1888,7 @@ mod tests {
         let _ = tasked_indexer
             .concurrent_pipeline(
                 MockCheckpointSequenceNumberHandler,
-                ConcurrentConfig {
-                    pruner: Some(PrunerConfig {
-                        interval_ms: 10,
-                        delay_ms: 1000,
-                        retention: 10,
-                        max_chunk_size: 10,
-                        prune_concurrency: 1,
-                    }),
-                    ..ConcurrentConfig::default()
-                },
+                ConcurrentConfig::default(),
             )
             .await;
 
