@@ -6,6 +6,9 @@ use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::Balance;
+use crate::coin_reservation::{
+    CoinReservationResolverTrait, ParsedDigest, ParsedObjectRefWithdrawal,
+};
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
     AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, AuthorityStrongQuorumSignInfo,
@@ -728,7 +731,11 @@ impl CallArg {
         match self {
             CallArg::Pure(_) => vec![],
             CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
-                vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
+                if ParsedDigest::is_coin_reservation_digest(&object_ref.2) {
+                    vec![]
+                } else {
+                    vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
+                }
             }
             CallArg::Object(ObjectArg::SharedObject {
                 id,
@@ -772,6 +779,16 @@ impl CallArg {
                 );
             }
             CallArg::Object(o) => match o {
+                ObjectArg::ImmOrOwnedObject(obj_ref)
+                    if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) =>
+                {
+                    if !config.enable_coin_reservation_obj_refs() {
+                        return Err(UserInputError::Unsupported(
+                            "coin reservation backward compatibility layer is not enabled"
+                                .to_string(),
+                        ));
+                    }
+                }
                 ObjectArg::ImmOrOwnedObject(_) => (),
                 ObjectArg::SharedObject { mutability, .. } => match mutability {
                     SharedObjectMutability::Mutable | SharedObjectMutability::Immutable => (),
@@ -1657,6 +1674,23 @@ impl TransactionKind {
         }))
     }
 
+    fn get_coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> + '_ {
+        let TransactionKind::ProgrammableTransaction(pt) = &self else {
+            return Either::Left(iter::empty());
+        };
+        Either::Right(pt.inputs.iter().filter_map(|input| {
+            if let CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)) = input {
+                if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) {
+                    Some(*obj_ref)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }))
+    }
+
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             TransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
@@ -2382,6 +2416,7 @@ pub trait TransactionDataAPI {
     /// invalid reservations.
     fn process_funds_withdrawals_for_signing(
         &self,
+        coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
 
     /// Like `process_funds_withdrawals_for_signing`, but must only be called on a certified
@@ -2521,10 +2556,13 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn process_funds_withdrawals_for_signing(
         &self,
+        coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
         let mut withdraws = self.get_funds_withdrawals();
 
         withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
+
+        for withdraw in self.coin_reservation_obj_refs() {}
 
         // Accumulate all withdraws per account.
         let mut withdraw_map: BTreeMap<_, u64> = BTreeMap::new();
@@ -2819,6 +2857,11 @@ impl TransactionDataV1 {
         } else {
             None
         }
+    }
+
+    fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> {
+        // TODO(XXX): add gas coin obj refs
+        self.kind.get_coin_reservation_obj_refs()
     }
 }
 

@@ -37,10 +37,25 @@
 use thiserror::Error;
 
 use crate::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     committee::EpochId,
     digests::{ChainIdentifier, ObjectDigest},
+    error::UserInputResult,
+    transaction::FundsWithdrawalArg,
 };
+
+/// Trait for resolving funds withdrawal from a coin reservation
+pub trait CoinReservationResolverTrait {
+    // Used to check validity of the transaction. If the coin_reservation does not
+    // point to an existing accumulator object, the transaction will be rejected.
+    fn resolve_funds_withdrawal(
+        &self,
+        // TODO(address-balances): Should we support sponsored withdrawals here?
+        // verify that the coin_reservation points to an existing accumulator object owned by the sender's address
+        sender: SuiAddress,
+        coin_reservation: ObjectRef,
+    ) -> UserInputResult<FundsWithdrawalArg>;
+}
 
 pub const COIN_RESERVATION_MAGIC: [u8; 20] = [
     0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac,
