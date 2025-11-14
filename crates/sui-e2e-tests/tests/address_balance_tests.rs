@@ -31,7 +31,7 @@ use sui_types::{
         TransactionDataV1, TransactionExpiration, TransactionKind,
     },
 };
-use test_cluster::TestClusterBuilder;
+use test_cluster::{TestCluster, TestClusterBuilder};
 use tonic::IntoRequest;
 
 async fn get_sender_and_gas(context: &mut WalletContext) -> (SuiAddress, ObjectRef) {
@@ -726,14 +726,8 @@ async fn test_address_balance_gas() {
     });
 
     let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
-
-    let (sender, gas) = get_sender_and_gas(context).await;
-    let gas_package_id = setup_test_package(context).await;
-
-    let deposit_tx = make_send_to_account_tx(10_000_000, sender, sender, gas, rgp);
-    test_cluster.sign_and_execute_transaction(&deposit_tx).await;
+    let (sender, gas_package_id) =
+        setup_address_balance_account(&mut test_cluster, 10_000_000).await;
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
@@ -741,6 +735,7 @@ async fn test_address_balance_gas() {
         verify_accumulator_exists(child_object_resolver, sender, 10_000_000);
     });
 
+    let rgp = test_cluster.get_reference_gas_price().await;
     let chain_id = test_cluster.get_chain_identifier();
 
     let tx = create_storage_test_transaction_address_balance(
@@ -977,6 +972,22 @@ async fn setup_test_package(context: &mut WalletContext) -> ObjectID {
     let resp = context.execute_transaction_must_succeed(txn).await;
     let package_ref = resp.get_new_package_obj().unwrap();
     package_ref.0
+}
+
+async fn setup_address_balance_account(
+    test_cluster: &mut TestCluster,
+    deposit_amount: u64,
+) -> (SuiAddress, ObjectID) {
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let context = &mut test_cluster.wallet;
+
+    let (sender, gas) = get_sender_and_gas(context).await;
+    let gas_package_id = setup_test_package(context).await;
+
+    let deposit_tx = make_send_to_account_tx(deposit_amount, sender, sender, gas, rgp);
+    test_cluster.sign_and_execute_transaction(&deposit_tx).await;
+
+    (sender, gas_package_id)
 }
 
 fn calculate_total_gas_cost(gas_summary: &GasCostSummary) -> u64 {
@@ -1568,16 +1579,11 @@ async fn test_address_balance_gas_cost_parity() {
     });
 
     let mut test_cluster = TestClusterBuilder::new().build().await;
+    let (sender, gas_test_package_id) =
+        setup_address_balance_account(&mut test_cluster, 100_000_000).await;
 
     let rgp = test_cluster.get_reference_gas_price().await;
     let chain_id = test_cluster.get_chain_identifier();
-
-    let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
-
-    let (sender, gas_for_deposit) = get_sender_and_gas(&mut test_cluster.wallet).await;
-
-    let deposit_tx = make_send_to_account_tx(100_000_000, sender, sender, gas_for_deposit, rgp);
-    test_cluster.sign_and_execute_transaction(&deposit_tx).await;
 
     let gas_coin = test_cluster
         .wallet
@@ -1726,21 +1732,17 @@ async fn test_address_balance_gas_charged_on_move_abort() {
     });
 
     let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let chain_id = test_cluster.get_chain_identifier();
-
-    let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
-
-    let (sender, gas_for_deposit) = get_sender_and_gas(&mut test_cluster.wallet).await;
-
-    let deposit_tx = make_send_to_account_tx(10_000_000, sender, sender, gas_for_deposit, rgp);
-    test_cluster.sign_and_execute_transaction(&deposit_tx).await;
+    let (sender, gas_test_package_id) =
+        setup_address_balance_account(&mut test_cluster, 10_000_000).await;
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         verify_accumulator_exists(child_object_resolver, sender, 10_000_000);
     });
+
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let chain_id = test_cluster.get_chain_identifier();
 
     let abort_tx = create_abort_test_transaction_address_balance(
         sender,
@@ -2349,14 +2351,8 @@ async fn test_address_balance_gas_budget_enforcement_with_storage() {
     });
 
     let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
-
-    let (sender, gas) = get_sender_and_gas(context).await;
-    let gas_package_id = setup_test_package(context).await;
-
-    let deposit_tx = make_send_to_account_tx(100_000_000, sender, sender, gas, rgp);
-    test_cluster.sign_and_execute_transaction(&deposit_tx).await;
+    let (sender, gas_package_id) =
+        setup_address_balance_account(&mut test_cluster, 100_000_000).await;
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
@@ -2364,6 +2360,7 @@ async fn test_address_balance_gas_budget_enforcement_with_storage() {
         verify_accumulator_exists(child_object_resolver, sender, 100_000_000);
     });
 
+    let rgp = test_cluster.get_reference_gas_price().await;
     let chain_id = test_cluster.get_chain_identifier();
 
     // Create a large object to trigger storage OOG
@@ -2429,15 +2426,10 @@ async fn test_address_balance_computation_oog() {
     });
 
     let mut test_cluster = TestClusterBuilder::new().build().await;
+    let (sender, gas_package_id) =
+        setup_address_balance_account(&mut test_cluster, 100_000_000).await;
+
     let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
-
-    let (sender, gas) = get_sender_and_gas(context).await;
-    let gas_package_id = setup_test_package(context).await;
-
-    let deposit_tx = make_send_to_account_tx(100_000_000, sender, sender, gas, rgp);
-    test_cluster.sign_and_execute_transaction(&deposit_tx).await;
-
     let chain_id = test_cluster.get_chain_identifier();
 
     // Create many small objects to trigger computation OOG
@@ -2500,15 +2492,10 @@ async fn test_address_balance_large_rebate() {
     });
 
     let mut test_cluster = TestClusterBuilder::new().build().await;
+    let (sender, gas_package_id) =
+        setup_address_balance_account(&mut test_cluster, 100_000_000).await;
+
     let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
-
-    let (sender, gas) = get_sender_and_gas(context).await;
-    let gas_package_id = setup_test_package(context).await;
-
-    let deposit_tx = make_send_to_account_tx(100_000_000, sender, sender, gas, rgp);
-    test_cluster.sign_and_execute_transaction(&deposit_tx).await;
-
     let chain_id = test_cluster.get_chain_identifier();
 
     let mut builder = ProgrammableTransactionBuilder::new();
