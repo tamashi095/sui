@@ -2560,9 +2560,12 @@ impl TransactionDataAPI for TransactionDataV1 {
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
         let mut withdraws = self.get_funds_withdrawals();
 
-        withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
+        for withdraw in self.coin_reservation_obj_refs() {
+            let withdrawal_arg = coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw)?;
+            withdraws.push(withdrawal_arg);
+        }
 
-        for withdraw in self.coin_reservation_obj_refs() {}
+        withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
 
         // Accumulate all withdraws per account.
         let mut withdraw_map: BTreeMap<_, u64> = BTreeMap::new();
