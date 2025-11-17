@@ -335,6 +335,11 @@ public entry fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
     cap.total_supply.decrease_supply(balance)
 }
 
+/// Burn a balance `b and decrease the total supply in `cap` accordingly.
+public fun burn_balance<T>(cap: &mut TreasuryCap<T>, b: Balance<T>): u64 {
+    cap.total_supply.decrease_supply(b)
+}
+
 /// Adds the given address to the deny list, preventing it from interacting with the specified
 /// coin type as an input to a transaction. Additionally at the start of the next epoch, the
 /// address will be unable to receive objects of this coin type.
